@@ -30,6 +30,7 @@ vi.mock("~/lib/openPullRequestLink", () => ({
 
 import ChatMarkdown, {
   canUseMarkdownFileShellActions,
+  firstStrongDirection,
   hasMarkdownFilePrimaryAction,
   orderedListGutterStyle,
   shouldUseMarkdownFileBrowserPrimaryAction,
@@ -287,5 +288,19 @@ describe("ChatMarkdown Windows file links", () => {
     expect(html).not.toContain("javascript:");
     expect(html).not.toContain("d:alert");
     expect(html).not.toContain("chat-markdown-file-link");
+  });
+});
+
+describe("firstStrongDirection", () => {
+  it("reads the first letter, skipping neutral digits and punctuation", () => {
+    expect(firstStrongDirection("רכיב | סטטוס")).toBe("rtl");
+    expect(firstStrongDirection("1. (שלב) ראשון")).toBe("rtl");
+    expect(firstStrongDirection("Component | Status")).toBe("ltr");
+    expect(firstStrongDirection("42 — Next.js then עברית")).toBe("ltr");
+  });
+
+  it("falls back to ltr when there is no strong character", () => {
+    expect(firstStrongDirection("")).toBe("ltr");
+    expect(firstStrongDirection("123 | 456")).toBe("ltr");
   });
 });
