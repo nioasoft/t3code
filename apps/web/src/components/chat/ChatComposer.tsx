@@ -169,6 +169,7 @@ import {
   submitComposerDraft,
 } from "./composerSubmission";
 import { ComposerPromptLengthValidation } from "./ComposerPromptLengthValidation";
+import { formatDroppedFilePaths } from "./droppedFilePaths";
 
 function ComposerVideoThumbnail({ file }: { file: File }) {
   const setVideo = useCallback(
@@ -3148,6 +3149,37 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     void addComposerAttachments(files);
   };
 
+  /**
+   * Insert dropped non-image files as filesystem paths. Only the desktop app
+   * can resolve a path from a dropped File, so in a browser tab this reports
+   * why nothing was inserted instead of silently swallowing the drop.
+   */
+  const insertDroppedFilePaths = (files: File[]) => {
+    const resolvePath = window.desktopBridge?.getPathForFile;
+    if (!resolvePath) {
+      setThreadError(
+        activeThreadId,
+        "Attaching files by path needs the desktop app. Paste an image, or type the path.",
+      );
+      return;
+    }
+    const paths = files
+      .map((file) => resolvePath(file))
+      .filter((path): path is string => path !== null);
+    const text = formatDroppedFilePaths(paths);
+    if (text.length === 0) {
+      setThreadError(activeThreadId, "Could not read the location of the dropped file(s).");
+      return;
+    }
+    if (!insertComposerTextAtEnd(text, { ensureLeadingBoundary: true })) {
+      toastManager.add({
+        type: "error",
+        title: "Unable to add to chat",
+        description: "The composer is busy; try again once it is ready.",
+      });
+    }
+  };
+
   const insertComposerTextAtEnd = (
     text: string,
     options?: { ensureLeadingBoundary?: boolean },
@@ -3271,7 +3303,29 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         composerEditorRef.current?.focusAt(cursor);
       },
       addDroppedFiles: (files: File[]) => {
-        void addComposerAttachments(files);
+        // The composer attaches what it can render inline — images and video.
+        // Everything else (audio, PDF, archives, …) is handed over as a path so
+        // the agent opens it from disk itself, instead of being rejected as "not
+        // a supported image type" or pushing a 40MB recording across the wire.
+        const attachable = files.filter(
+          (file) =>
+            file.type.startsWith("image/") ||
+            videoMimeType({ name: file.name, mimeType: file.type }) !== undefined,
+        );
+        const byPath = files.filter((file) => !attachable.includes(file));
+        if (attachable.length > 0) {
+          void addComposerAttachments(attachable);
+        }
+        if (byPath.length > 0) {
+          // Deliberately no focusComposer() on this path. `applyPromptReplacement`
+          // focuses on the next frame, once Lexical has reconciled; focusing
+          // synchronously here makes the not-yet-reconciled editor sync its stale
+          // empty state back over the text we just inserted, so the drop looks
+          // like it silently did nothing. Same footgun the file-tree mention drop
+          // documents in makeComposerMentionDragHandlers.
+          insertDroppedFilePaths(byPath);
+          return;
+        }
         focusComposer();
       },
       insertTextAtEnd: insertComposerTextAtEnd,
