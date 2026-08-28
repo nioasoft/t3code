@@ -150,7 +150,11 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <Badge variant="secondary">Plan</Badge>
-          <p className="truncate text-sm font-medium text-foreground">{title}</p>
+          {/* The title is read out of the plan markdown, so it is author text in
+              whatever language the plan was written in — not chrome. */}
+          <p dir="auto" className="truncate text-sm font-medium text-foreground">
+            {title}
+          </p>
         </div>
         <Menu>
           <MenuTrigger

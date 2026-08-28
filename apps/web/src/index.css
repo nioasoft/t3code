@@ -2114,10 +2114,22 @@ code {
   unicode-bidi: plaintext;
 }
 
+/* A file link is a path, not prose: inside a Hebrew sentence its slashes and
+   extension reorder under the paragraph's direction and the path stops being
+   readable. Same treatment as code, since that is what it is. */
 .chat-markdown pre,
 .chat-markdown code,
+.chat-markdown a.chat-markdown-file-link,
 .chat-markdown .chat-markdown-codeblock {
   direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Inline emphasis and links are their own bidi runs. Without isolation an
+   English `<strong>` inside a Hebrew sentence drags the neutral characters
+   around it — a trailing comma or bracket lands on the wrong side of the
+   emphasis rather than at the end of the phrase. */
+.chat-markdown :is(strong, em, a:not(.chat-markdown-file-link)) {
   unicode-bidi: isolate;
 }
 
