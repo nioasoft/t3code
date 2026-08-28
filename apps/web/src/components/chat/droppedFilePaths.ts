@@ -6,7 +6,44 @@
  *
  * Paths are only available in the desktop app (Electron's `webUtils`); in a
  * browser tab the File object carries no filesystem path at all.
+ *
+ * A path is also only *meaningful* where the agent can open it. The desktop
+ * bridge resolves a path on the machine the client runs on, so the path is
+ * valid only when the thread's environment is that same machine — see
+ * `droppedPathsResolveInEnvironment`.
  */
+
+/**
+ * Whether a filesystem path read from the local desktop bridge means anything
+ * to the environment a thread runs in.
+ *
+ * The bridge resolves the path on *this* machine. `desktop-managed` is the one
+ * environment the desktop app supervises here, so only a thread bound to that
+ * environment shares the filesystem the path names. Every other connection —
+ * a LAN or Tailscale host, a relay, a tunnel, another desktop acting as server
+ * — runs the agent on a different machine, where the path either does not
+ * exist or, worse, names a different file.
+ *
+ * Passing the ids explicitly keeps this pure: the caller reads the primary
+ * environment, this decides.
+ */
+export function droppedPathsResolveInEnvironment(input: {
+  readonly primarySource: string | undefined;
+  readonly primaryEnvironmentId: string | undefined;
+  readonly threadEnvironmentId: string | undefined;
+}): boolean {
+  if (input.primarySource !== "desktop-managed") {
+    return false;
+  }
+  // Both ids must be known. A missing id is not a match: bootstrapping is not
+  // evidence that the thread runs here, and guessing wrong inserts a path the
+  // agent silently cannot read.
+  return (
+    input.primaryEnvironmentId !== undefined &&
+    input.threadEnvironmentId !== undefined &&
+    input.primaryEnvironmentId === input.threadEnvironmentId
+  );
+}
 
 /**
  * Quote a path for the prompt when whitespace would make where it ends

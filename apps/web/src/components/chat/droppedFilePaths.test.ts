@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { formatDroppedFilePaths, quoteDroppedFilePath } from "./droppedFilePaths";
+import {
+  droppedPathsResolveInEnvironment,
+  formatDroppedFilePaths,
+  quoteDroppedFilePath,
+} from "./droppedFilePaths";
 
 describe("quoteDroppedFilePath", () => {
   it("leaves a path without whitespace alone", () => {
@@ -37,5 +41,74 @@ describe("formatDroppedFilePaths", () => {
 
   it("returns an empty string when nothing resolved", () => {
     expect(formatDroppedFilePaths([])).toBe("");
+  });
+});
+
+describe("droppedPathsResolveInEnvironment", () => {
+  const LOCAL = "env-local";
+  const OTHER = "env-other";
+
+  it("accepts a thread running on the desktop-managed environment", () => {
+    expect(
+      droppedPathsResolveInEnvironment({
+        primarySource: "desktop-managed",
+        primaryEnvironmentId: LOCAL,
+        threadEnvironmentId: LOCAL,
+      }),
+    ).toBe(true);
+  });
+
+  it("refuses a thread on a different environment even when the bridge is present", () => {
+    // The desktop app supervises env-local, but this thread runs on another
+    // machine: its agent cannot open a path read from this filesystem.
+    expect(
+      droppedPathsResolveInEnvironment({
+        primarySource: "desktop-managed",
+        primaryEnvironmentId: LOCAL,
+        threadEnvironmentId: OTHER,
+      }),
+    ).toBe(false);
+  });
+
+  it.each(["configured", "manual", "window-origin"])(
+    "refuses a %s connection, which always names a server elsewhere",
+    (source) => {
+      expect(
+        droppedPathsResolveInEnvironment({
+          primarySource: source,
+          primaryEnvironmentId: LOCAL,
+          threadEnvironmentId: LOCAL,
+        }),
+      ).toBe(false);
+    },
+  );
+
+  it("refuses while either id is still unknown", () => {
+    // Bootstrapping is not evidence the thread runs here; guessing wrong
+    // inserts a path the agent silently cannot read.
+    expect(
+      droppedPathsResolveInEnvironment({
+        primarySource: "desktop-managed",
+        primaryEnvironmentId: undefined,
+        threadEnvironmentId: LOCAL,
+      }),
+    ).toBe(false);
+    expect(
+      droppedPathsResolveInEnvironment({
+        primarySource: "desktop-managed",
+        primaryEnvironmentId: LOCAL,
+        threadEnvironmentId: undefined,
+      }),
+    ).toBe(false);
+  });
+
+  it("refuses when there is no primary environment at all", () => {
+    expect(
+      droppedPathsResolveInEnvironment({
+        primarySource: undefined,
+        primaryEnvironmentId: undefined,
+        threadEnvironmentId: LOCAL,
+      }),
+    ).toBe(false);
   });
 });

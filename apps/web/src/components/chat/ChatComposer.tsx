@@ -169,7 +169,9 @@ import {
   submitComposerDraft,
 } from "./composerSubmission";
 import { ComposerPromptLengthValidation } from "./ComposerPromptLengthValidation";
-import { formatDroppedFilePaths } from "./droppedFilePaths";
+import { getPrimaryKnownEnvironment } from "~/environments/primary";
+
+import { droppedPathsResolveInEnvironment, formatDroppedFilePaths } from "./droppedFilePaths";
 
 function ComposerVideoThumbnail({ file }: { file: File }) {
   const setVideo = useCallback(
@@ -3165,6 +3167,23 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     if (!resolvePath) {
       reportFailure(
         "Attaching files by path needs the desktop app. Paste an image, or type the path.",
+      );
+      return false;
+    }
+    // The bridge reads a path on THIS machine. Inserting it into a thread whose
+    // agent runs elsewhere hands over a path that host cannot open — so gate on
+    // the thread's environment being the one this desktop app supervises,
+    // rather than on the bridge merely existing.
+    const primaryEnvironment = getPrimaryKnownEnvironment();
+    if (
+      !droppedPathsResolveInEnvironment({
+        primarySource: primaryEnvironment?.source,
+        primaryEnvironmentId: primaryEnvironment?.environmentId,
+        threadEnvironmentId: environmentId,
+      })
+    ) {
+      reportFailure(
+        "This thread runs on another machine, which cannot open a path from this one. Attach the file, or type a path that exists there.",
       );
       return false;
     }
